@@ -8,3 +8,4 @@ python-dotenv
 xlsxwriter
 Flask-Cors
 google-auth
+db-dtypes
