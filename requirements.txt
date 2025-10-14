@@ -9,3 +9,4 @@ xlsxwriter
 Flask-Cors
 google-auth
 db-dtypes
+gunicorn

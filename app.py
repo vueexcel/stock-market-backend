@@ -77,4 +77,4 @@ def download_bigquery_data():
         return jsonify({"success": False, "error": "An internal server error occurred."}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 80)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
