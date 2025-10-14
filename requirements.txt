@@ -1,0 +1,10 @@
+flask
+pandas
+google-cloud-bigquery
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+python-dotenv
+xlsxwriter
+Flask-Cors
+google-auth
