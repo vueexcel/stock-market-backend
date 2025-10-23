@@ -3,11 +3,11 @@ from flask_cors import CORS
 from bigquery_data import generate_big_query_data
 from dotenv import load_dotenv
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date
 from uuid import uuid4
 from typing import Dict, Any, List
 import os
-
+from analytics_data import calculate_all_returns
 load_dotenv()
 
 app = Flask(__name__)
@@ -75,6 +75,111 @@ def download_bigquery_data():
     except Exception as e:
         print(f"An error occurred: {e}")
         return jsonify({"success": False, "error": "An internal server error occurred."}), 500
+
+@app.route('/analytics_performance', methods=['POST', 'OPTIONS', 'GET'])
+def analytics_performance():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        data = request.get_json(force=True, silent=True) or {}
+        ticker = (data.get('ticker') or '').strip()
+        if not ticker:
+            return jsonify({'success': False, 'error': 'Missing required field: ticker'}), 400
+        # Optional custom date range (expects ISO dates from HTML date inputs)
+        custom_start_raw = (data.get('customStartDate') or '').strip()
+        custom_end_raw = (data.get('customEndDate') or '').strip()
+        custom_range = None
+        if custom_start_raw and custom_end_raw:
+            try:
+                start_dt = date.fromisoformat(custom_start_raw)
+                end_dt = date.fromisoformat(custom_end_raw)
+                if start_dt <= end_dt:
+                    custom_range = (start_dt, end_dt)
+            except Exception:
+                # Ignore invalid date formats and proceed without custom range
+                custom_range = None
+
+        results = calculate_all_returns(ticker=ticker, custom_range=custom_range)
+        def format_periods(periods, label_key='period', label_prefix=None):
+            formatted = []
+            for row in periods:
+                period = row.get(label_key)
+                if label_prefix:
+                    period = f"{label_prefix}: {period}"
+                start_date = row.get('start_date_found') or row.get('start_date_requested')
+                end_date = row.get('end_date_found') or row.get('end_date_requested')
+                years = float(row.get('years') or 0.0)
+                start_price = float(row.get('start_price') or 0.0)
+                end_price = float(row.get('end_price') or 0.0)
+                price_diff = float(row.get('price_difference') or (end_price - start_price))
+                total_return = float(row.get('total_return_pct') or (
+                    0.0 if start_price == 0 else round(((end_price - start_price) / start_price) * 100, 2)
+                ))
+                simple_annual_return = round(total_return / years, 2) if years > 0 else 0.0
+                cagr_percent = round((((end_price / start_price) ** (1 / years)) - 1) * 100, 2) if (years > 0 and start_price > 0) else 0.0
+                formatted.append({
+                    'period': period,
+                    'startDate': start_date,
+                    'endDate': end_date,
+                    'years': years,
+                    'startPrice': start_price,
+                    'endPrice': end_price,
+                    'priceDifference': price_diff,
+                    'totalReturn': total_return,
+                    'simpleAnnualReturn': simple_annual_return,
+                    'cagrPercent': cagr_percent
+                })
+            return formatted
+        dynamic_data = format_periods(results.get('dynamic_periods', []))
+        predefined_data = format_periods(results.get('predefined_periods', []))
+        annual_data = format_periods(results.get('annual_returns', []), label_key='year')
+        # Custom range (single row)
+        custom_raw = results.get('custom_range')
+        custom_data = []
+        if custom_raw:
+            # Normalize shape to match other rows and add a fixed label
+            start_date = custom_raw.get('start_date_found') or custom_raw.get('start_date_requested')
+            end_date = custom_raw.get('end_date_found') or custom_raw.get('end_date_requested')
+            years = float(custom_raw.get('years') or 0.0)
+            start_price = float(custom_raw.get('start_price') or 0.0)
+            end_price = float(custom_raw.get('end_price') or 0.0)
+            price_diff = float(custom_raw.get('price_difference') or (end_price - start_price))
+            total_return = float(custom_raw.get('total_return_pct') or (
+                0.0 if start_price == 0 else round(((end_price - start_price) / start_price) * 100, 2)
+            ))
+            simple_annual_return = round(total_return / years, 2) if years > 0 else 0.0
+            cagr_percent = round((((end_price / start_price) ** (1 / years)) - 1) * 100, 2) if (years > 0 and start_price > 0) else 0.0
+            custom_data.append({
+                'period': 'Selected dates',
+                'startDate': start_date,
+                'endDate': end_date,
+                'years': years,
+                'startPrice': start_price,
+                'endPrice': end_price,
+                'priceDifference': price_diff,
+                'totalReturn': total_return,
+                'simpleAnnualReturn': simple_annual_return,
+                'cagrPercent': cagr_percent
+            })
+
+        # Structured response
+        response = {
+            'success': True,
+            'ticker': results.get('ticker', ticker.upper()),
+            'asOfDate': results.get('as_of_date'),
+            'performance': {
+                'dynamicPeriods': dynamic_data,
+                'predefinedPeriods': predefined_data,
+                'annualReturns': annual_data,
+                'customRange': custom_data
+            }
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        print(f"Error processing analytics_performance: {str(e)}")
+        return jsonify({'success': False, 'error': f'Failed to get analytics performance: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
