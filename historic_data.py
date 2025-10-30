@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from google.cloud import bigquery
 from google.oauth2 import service_account
 import pandas as pd
+from calendar import monthrange
 
 
 def write_service_account_to_temp(env_var_name: str) -> str:
@@ -107,28 +108,42 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
     )
 
     results = client.query(query, job_config=job_config).result()
-
-    data = [
-        {
+    data = []
+    for row in results:
+        year = int(row["year"])
+        month = int(row["month"])
+        last_day = monthrange(year, month)[1]
+        data.append({
             "ticker": row["Ticker"],
-            "year": int(row["year"]),
-            "month": int(row["month"]),
+            "year": year,
+            "month": month,
             "open": float(row["Open"]),
             "high": float(row["High"]),
             "low": float(row["Low"]),
             "close": float(row["Close"]),
-            "start_date": start_date,
-            "end_date": end_date
-        }
-        for row in results
-    ]
+            "start_date": f"{year}-{month:02d}-01",
+            "end_date": f"{year}-{month:02d}-{last_day:02d}"
+        })
+
+    # data = [
+    #     {
+    #         "ticker": row["Ticker"],
+    #         "year": int(row["year"]),
+    #         "month": int(row["month"]),
+    #         "open": float(row["Open"]),
+    #         "high": float(row["High"]),
+    #         "low": float(row["Low"]),
+    #         "close": float(row["Close"]),
+    #         "start_date": start_date,
+    #         "end_date": end_date
+    #     }
+    #     for row in results
+    # ]
 
     print(f"Fetched monthly OHLC for {ticker} from {start_date} to {end_date}")
     return data
 
 
-
-# def get_monthly_ohlc(ticker: str, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
     """
     Fetches OHLC data for a ticker from BigQuery and aggregates it by month.
     """
