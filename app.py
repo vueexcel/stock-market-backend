@@ -135,6 +135,12 @@ def analytics_performance():
         dynamic_data = format_periods(results.get('dynamic_periods', []))
         predefined_data = format_periods(results.get('predefined_periods', []))
         annual_data = format_periods(results.get('annual_returns', []), label_key='year')
+        # ------ms-----
+        monthly_data = format_periods(results.get('monthly_returns', []), label_key='month')
+        quarterly_data = format_periods(results.get('quarterly_returns', []), label_key='quarter')
+
+
+        # ------ms-----
         # Custom range (single row)
         custom_raw = results.get('custom_range')
         custom_data = []
@@ -173,7 +179,9 @@ def analytics_performance():
                 'dynamicPeriods': dynamic_data,
                 'predefinedPeriods': predefined_data,
                 'annualReturns': annual_data,
-                'customRange': custom_data
+                'customRange': custom_data,
+                'quarterlyReturns': quarterly_data,
+                'monthlyReturns': monthly_data,
             }
         }
 
@@ -272,4 +280,5 @@ def performance_return_data():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5001)), debug=False)
+

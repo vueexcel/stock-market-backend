@@ -37,7 +37,8 @@ DAYS_MONTH = 30.4
 DAYS_QUARTER = 91.3
 
 DYNAMIC_PERIOD_DEFS = [
-    {"name": "Last date", "type": "point", "days": 0},
+    {"name": "Last date", "type": "days", "days": 1},
+    {"name": "Week", "type": "days", "days": 7},
     {"name": "Last Month", "type": "days", "days": 30},
     {"name": "Last 3 months", "type": "days", "days": 91},
     {"name": "Last 6 months", "type": "days", "days": 183},
@@ -185,6 +186,7 @@ def calculate_dynamic_periods(client: bigquery.Client, ticker: str, end_date: da
             "end_price": None if end_price is None else round(end_price, 4),
             "price_difference": price_diff,
             "total_return_pct": total_return,
+         
         })
     return results
 
@@ -272,6 +274,77 @@ def calculate_custom_range(client: bigquery.Client, ticker: str, start_date: dat
         "total_return_pct": total_return,
     }
 
+# ---------- ms ------------------
+
+def calculate_monthly_returns(client: bigquery.Client, ticker: str, end_date: date, from_year: int = 1970) -> List[Dict[str, Any]]:
+    prices = fetch_price_series(client, ticker, date(from_year, 1, 1), end_date)
+    if prices.empty:
+        return []
+
+    prices['Date'] = pd.to_datetime(prices['Date'])
+    prices.set_index('Date', inplace=True)
+    monthly = prices['Adj_Close'].resample('M').last()
+
+    results = []
+    for i in range(1, len(monthly)):
+        start_date = monthly.index[i - 1].date()
+        end_date_ = monthly.index[i].date()
+        start_price = monthly.iloc[i - 1]
+        end_price = monthly.iloc[i]
+        years = years_between(start_date, end_date_)
+        price_diff = round(end_price - start_price, 4)
+        total_return = pct_return(start_price, end_price)
+        results.append({
+            "month": end_date_.strftime("%Y-%m"),
+            "start_date_requested": start_date.isoformat(),
+            "start_date_found": start_date.isoformat(),
+            "end_date_requested": end_date_.isoformat(),
+            "end_date_found": end_date_.isoformat(),
+            "years": years,
+            "start_price": round(start_price, 4),
+            "end_price": round(end_price, 4),
+            "price_difference": price_diff,
+            "total_return_pct": total_return,
+        })
+    return results
+
+
+def calculate_quarterly_returns(client: bigquery.Client, ticker: str, end_date: date, from_year: int = 1970) -> List[Dict[str, Any]]:
+    prices = fetch_price_series(client, ticker, date(from_year, 1, 1), end_date)
+    if prices.empty:
+        return []
+
+    prices['Date'] = pd.to_datetime(prices['Date'])
+    prices.set_index('Date', inplace=True)
+    quarterly = prices['Adj_Close'].resample('Q').last()
+
+    results = []
+    for i in range(1, len(quarterly)):
+        start_date = quarterly.index[i - 1].date()
+        end_date_ = quarterly.index[i].date()
+        start_price = quarterly.iloc[i - 1]
+        end_price = quarterly.iloc[i]
+        years = years_between(start_date, end_date_)
+        price_diff = round(end_price - start_price, 4)
+        total_return = pct_return(start_price, end_price)
+        results.append({
+            "quarter": f"{end_date_.year}-Q{((end_date_.month - 1)//3) + 1}",
+            "start_date_requested": start_date.isoformat(),
+            "start_date_found": start_date.isoformat(),
+            "end_date_requested": end_date_.isoformat(),
+            "end_date_found": end_date_.isoformat(),
+            "years": years,
+            "start_price": round(start_price, 4),
+            "end_price": round(end_price, 4),
+            "price_difference": price_diff,
+            "total_return_pct": total_return,
+        })
+    return results
+
+# ---------- ms ------------------
+
+
+
 # ------------------- Main public function -------------------
 
 def calculate_all_returns(ticker: str,
@@ -279,14 +352,6 @@ def calculate_all_returns(ticker: str,
                           include_annual: bool = True,
                           custom_range: Optional[Tuple[date, date]] = None,
                           annual_from_year: int = 2010) -> Dict[str, Any]:
-    """
-    Primary entry point.
-    - ticker: single ticker string (e.g. "AAPL")
-    - include_predefined / include_annual: toggles
-    - custom_range: optional (start_date, end_date)
-    - annual_from_year: earliest year to compute annual returns from
-    Returns JSON-serializable dict.
-    """
     client = get_bigquery_client()
     end_date = get_max_date(client)
     t = ticker.upper()
@@ -294,6 +359,8 @@ def calculate_all_returns(ticker: str,
     dynamic = calculate_dynamic_periods(client, t, end_date)
     predefined = calculate_predefined_periods(client, t, end_date) if include_predefined else []
     annual = calculate_annual_returns(client, t, end_date, from_year=annual_from_year) if include_annual else []
+    monthly = calculate_monthly_returns(client, t, end_date, from_year=annual_from_year)
+    quarterly = calculate_quarterly_returns(client, t, end_date, from_year=annual_from_year)
     custom = None
     if custom_range:
         custom = calculate_custom_range(client, t, custom_range[0], custom_range[1])
@@ -304,8 +371,14 @@ def calculate_all_returns(ticker: str,
         "dynamic_periods": dynamic,
         "predefined_periods": predefined,
         "annual_returns": annual,
+        "quarterly_returns": quarterly,
+        "monthly_returns": monthly,
         "custom_range": custom
     }
+
+
+
+
 
 # ------------------- Example runner -------------------
 if __name__ == "__main__":
