@@ -8,6 +8,7 @@ from uuid import uuid4
 from typing import Dict, Any, List
 import os
 from analytics_data import calculate_all_returns
+from historic_data import get_monthly_ohlc
 load_dotenv()
 
 app = Flask(__name__)
@@ -133,6 +134,12 @@ def analytics_performance():
         dynamic_data = format_periods(results.get('dynamic_periods', []))
         predefined_data = format_periods(results.get('predefined_periods', []))
         annual_data = format_periods(results.get('annual_returns', []), label_key='year')
+        # ------ms-----
+        monthly_data = format_periods(results.get('monthly_returns', []), label_key='month')
+        quarterly_data = format_periods(results.get('quarterly_returns', []), label_key='quarter')
+
+
+        # ------ms-----
         # Custom range (single row)
         custom_raw = results.get('custom_range')
         custom_data = []
@@ -171,7 +178,9 @@ def analytics_performance():
                 'dynamicPeriods': dynamic_data,
                 'predefinedPeriods': predefined_data,
                 'annualReturns': annual_data,
-                'customRange': custom_data
+                'customRange': custom_data,
+                'quarterlyReturns': quarterly_data,
+                'monthlyReturns': monthly_data,
             }
         }
 
@@ -181,5 +190,31 @@ def analytics_performance():
         print(f"Error processing analytics_performance: {str(e)}")
         return jsonify({'success': False, 'error': f'Failed to get analytics performance: {str(e)}'}), 500
 
+
+@app.route('/monthly_ohlc', methods=['POST'])
+def monthly_ohlc():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        ticker = (data.get("ticker") or "").strip()
+        if not ticker:
+            return jsonify({"success": False, "error": "Missing required field: ticker"}), 400
+
+        start_date = (data.get("start_date") or "").strip() or None
+        end_date = (data.get("end_date") or "").strip() or None
+
+        monthly_data = get_monthly_ohlc(ticker=ticker, start_date=start_date, end_date=end_date)
+
+        if not monthly_data:
+            return jsonify({"success": False, "error": "No data found for the given ticker/date range"}), 404
+
+        return jsonify({"success": True, "ticker": ticker.upper(), "monthlyOHLC": monthly_data})
+
+    except Exception as e:
+        print(f"Error in /monthly_ohlc: {str(e)}")
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+    
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5001)), debug=False)
+
