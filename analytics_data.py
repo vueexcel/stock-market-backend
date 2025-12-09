@@ -220,24 +220,40 @@ def calculate_predefined_periods(client: bigquery.Client, ticker: str, end_date:
         })
     return results
 
-def calculate_annual_returns(client: bigquery.Client, ticker: str, end_date: date, from_year: int = 1970) -> List[Dict[str, Any]]:
-    prices = fetch_price_series(client, ticker, date(from_year, 1, 1), end_date)
+def calculate_annual_returns(client: bigquery.Client, ticker: str, end_date: date, ) -> List[Dict[str, Any]]:
+    # Detect actual first trading date
+    first_date = get_min_date_for_ticker(client, ticker)
+    start_year = first_date.year
+
+    # Pull only usable data
+    prices = fetch_price_series(client, ticker, first_date, end_date)
+
     results = []
-    for yr in range(from_year, end_date.year + 1):
-        start_req = date(yr, 1, 1)
-        # for the active year, use end_date; for past years use Dec 31
+    for yr in range(start_year, end_date.year + 1):
+
+        # First year → use actual first trading date
+        if yr == start_year:
+            start_req = first_date
+        else:
+            start_req = date(yr, 1, 1)
+
+        # Last year uses end_date
         if yr == end_date.year:
             end_req = end_date
         else:
             end_req = date(yr, 12, 31)
+
         start_found, start_price = price_on_or_before(prices, start_req)
         end_found, end_price = price_on_or_before(prices, end_req)
+
+        # Skip ghost years → this is the fix
+        if start_price is None or end_price is None:
+            continue
+
         yrs = years_between(start_req, end_req)
-        price_diff = None
-        total_return = None
-        if start_price is not None and end_price is not None:
-            price_diff = round(end_price - start_price, 4)
-            total_return = pct_return(start_price, end_price)
+        price_diff = round(end_price - start_price, 4)
+        total_return = pct_return(start_price, end_price)
+
         results.append({
             "year": yr,
             "start_date_requested": start_req.isoformat(),
@@ -245,12 +261,16 @@ def calculate_annual_returns(client: bigquery.Client, ticker: str, end_date: dat
             "end_date_requested": end_req.isoformat(),
             "end_date_found": end_found.isoformat() if end_found else None,
             "years": yrs,
-            "start_price": None if start_price is None else round(start_price, 4),
-            "end_price": None if end_price is None else round(end_price, 4),
+            "start_price": round(start_price, 4),
+            "end_price": round(end_price, 4),
             "price_difference": price_diff,
             "total_return_pct": total_return,
         })
+
     return results
+
+
+
 
 def calculate_custom_range(client: bigquery.Client, ticker: str, start_date: date, end_date: date) -> Dict[str, Any]:
     prices = fetch_price_series(client, ticker, start_date - timedelta(days=5), end_date)
