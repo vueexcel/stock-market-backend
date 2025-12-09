@@ -506,6 +506,7 @@ def get_ticker_details_by_index(index_value: str, period_value: str) -> List[Dic
                 "industry": str(row["Industry"]) if pd.notna(row["Industry"]) else "",
                 "index": str(row["Index"]) if pd.notna(row["Index"]) else "",
                 "totalReturnPercentage": total_return_pct,
+                "price": end_price,
             })
         
         print(f"Returning {len(result)} ticker details with total return calculations")
