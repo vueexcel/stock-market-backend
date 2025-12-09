@@ -76,6 +76,7 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
             High,
             Low,
             Close,
+            `Adj Close`,
             EXTRACT(YEAR FROM Date) AS year,
             EXTRACT(MONTH FROM Date) AS month
         FROM `{TABLE_FQN}`
@@ -90,7 +91,8 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
             ARRAY_AGG(Open ORDER BY Date ASC LIMIT 1)[OFFSET(0)] AS Open,
             MAX(High) AS High,
             MIN(Low) AS Low,
-            ARRAY_AGG(Close ORDER BY Date DESC LIMIT 1)[OFFSET(0)] AS Close
+            ARRAY_AGG(Close ORDER BY Date DESC LIMIT 1)[OFFSET(0)] AS Close,
+            ARRAY_AGG(`Adj Close` ORDER BY Date DESC LIMIT 1)[OFFSET(0)] AS `Adj Close`
         FROM stock_data
         GROUP BY Ticker, year, month
     )
@@ -121,6 +123,7 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
             "high": float(row["High"]),
             "low": float(row["Low"]),
             "close": float(row["Close"]),
+            "adj_close": float(row["Adj Close"]),
             "start_date": f"{year}-{month:02d}-01",
             "end_date": f"{year}-{month:02d}-{last_day:02d}"
         })
@@ -158,6 +161,7 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
             High,
             Low,
             Close,
+            Adj Close,
             EXTRACT(YEAR FROM Date) AS year,
             EXTRACT(MONTH FROM Date) AS month
         FROM `{TABLE_FQN}`
@@ -200,6 +204,7 @@ def get_monthly_ohlc(ticker: str, start_date: Optional[str] = None, end_date: Op
             "high": float(row["High"]),
             "low": float(row["Low"]),
             "close": float(row["Close"]),
+            "adj_close": float(row["Adj Close"]),
         }
         for row in results
     ]

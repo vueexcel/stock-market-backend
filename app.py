@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 import os
 from analytics_data import calculate_all_returns
 from historic_data import get_monthly_ohlc
+from PerformanceReturn import get_unique_indices, get_period_options, get_ticker_details_by_index
 load_dotenv()
 
 app = Flask(__name__)
@@ -212,7 +213,70 @@ def monthly_ohlc():
     except Exception as e:
         print(f"Error in /monthly_ohlc: {str(e)}")
         return jsonify({"success": False, "error": "Internal server error"}), 500
-    
+
+
+@app.route('/performance_return_indices', methods=['GET', 'OPTIONS'])
+def performance_return_indices():
+    """Endpoint to fetch unique Index values from TickerDetails table"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        indices = get_unique_indices()
+        return jsonify({
+            "success": True,
+            "indices": indices
+        })
+    except Exception as e:
+        print(f"Error in /performance_return_indices: {str(e)}")
+        return jsonify({"success": False, "error": f"Failed to fetch indices: {str(e)}"}), 500
+
+
+@app.route('/performance_return_periods', methods=['GET', 'OPTIONS'])
+def performance_return_periods():
+    """Endpoint to fetch period options for Performance Return page"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        periods = get_period_options()
+        return jsonify({
+            "success": True,
+            "periods": periods
+        })
+    except Exception as e:
+        print(f"Error in /performance_return_periods: {str(e)}")
+        return jsonify({"success": False, "error": f"Failed to fetch periods: {str(e)}"}), 500
+
+
+@app.route('/performance_return_data', methods=['POST', 'OPTIONS'])
+def performance_return_data():
+    """Endpoint to fetch ticker details by index and period"""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        
+        data = request.get_json(force=True, silent=True) or {}
+        index_value = (data.get('index') or '').strip()
+        period = (data.get('period') or '').strip()
+        
+        if not index_value:
+            return jsonify({"success": False, "error": "Missing required field: index"}), 400
+        
+        if not period:
+            return jsonify({"success": False, "error": "Missing required field: period"}), 400
+        
+        ticker_details = get_ticker_details_by_index(index_value, period)
+        
+        return jsonify({
+            "success": True,
+            "index": index_value,
+            "period": period,
+            "data": ticker_details
+        })
+    except Exception as e:
+        print(f"Error in /performance_return_data: {str(e)}")
+        return jsonify({"success": False, "error": f"Failed to fetch ticker details: {str(e)}"}), 500
 
 
 if __name__ == '__main__':

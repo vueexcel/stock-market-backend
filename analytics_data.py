@@ -343,6 +343,28 @@ def calculate_quarterly_returns(client: bigquery.Client, ticker: str, end_date: 
 
 # ---------- ms ------------------
 
+# -------------------- helper functions --------------------
+# First detect the earliest date for each ticker
+def get_min_date_for_ticker(client: bigquery.Client, ticker: str) -> date:
+    q = f"""
+        SELECT MIN(Date) AS min_date
+        FROM `{TABLE_FQN}`
+        WHERE Ticker = @ticker
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("ticker", "STRING", ticker)
+        ]
+    )
+    df = client.query(q, job_config=job_config).to_dataframe()
+    if df.empty or pd.isna(df.loc[0, "min_date"]):
+        raise ValueError(f"No start date found for ticker {ticker}")
+    md = df.loc[0, "min_date"]
+    if isinstance(md, pd.Timestamp): return md.date()
+    if isinstance(md, datetime): return md.date()
+    return md
+
+
 
 
 # ------------------- Main public function -------------------
@@ -351,14 +373,17 @@ def calculate_all_returns(ticker: str,
                           include_predefined: bool = True,
                           include_annual: bool = True,
                           custom_range: Optional[Tuple[date, date]] = None,
-                          annual_from_year: int = 2010) -> Dict[str, Any]:
+                       
+                          annual_from_year: int = 1970,
+                          ) -> Dict[str, Any]:
     client = get_bigquery_client()
     end_date = get_max_date(client)
     t = ticker.upper()
 
     dynamic = calculate_dynamic_periods(client, t, end_date)
     predefined = calculate_predefined_periods(client, t, end_date) if include_predefined else []
-    annual = calculate_annual_returns(client, t, end_date, from_year=annual_from_year) if include_annual else []
+    # annual = calculate_annual_returns(client, t, end_date, from_year=annual_from_year) if include_annual else []
+    annual = calculate_annual_returns(client, t, end_date, from_year= get_min_date_for_ticker(client , t).year ) if include_annual else []
     monthly = calculate_monthly_returns(client, t, end_date, from_year=annual_from_year)
     quarterly = calculate_quarterly_returns(client, t, end_date, from_year=annual_from_year)
     custom = None
